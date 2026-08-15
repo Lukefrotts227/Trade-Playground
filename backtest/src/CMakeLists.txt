@@ -17,3 +17,9 @@ target_include_directories(backtest_engine_lib PUBLIC
 target_link_libraries(backtest_engine_lib PUBLIC
     nlohmann_json::nlohmann_json
 )
+
+add_executable(backtest_cli main.cpp)
+
+target_link_libraries(backtest_cli PRIVATE
+    backtest_engine_lib
+)

@@ -1,27 +1,32 @@
 # Trade Playground
 
-A trading strategy playground: describe a strategy in plain English, an LLM turns it
-into structured rules, a C++ engine backtests those rules against historical data,
-and an LLM explains the results in plain English.
+A trading strategy playground: describe a strategy in plain English, and get a
+backtest of it against historical data, explained back to you in plain English.
 
-## MVP Pipeline
+No finance background needed. Behind the scenes, an LLM pipeline turns your
+description into a precise, structured strategy, a C++ engine backtests it, and
+an LLM turns the results into a plain-English explanation.
+
+## How it works
 
 ```
-Plain English strategy
+"buy when it looks oversold, sell when it looks overbought"
         |
         v
-  [Stage 1a: Clarify]   Gemini (free tier) rewrites vague English into a precise,
-        |                unambiguous strategy description, and explains any trading
-        |                concepts it introduces (beginner-friendly).
+  Clarify        Rewrites your idea into a precise strategy (e.g. "RSI(14) < 30")
+                  and explains any concepts it introduces along the way.
+        |
         v
-  [Stage 1b: Convert]   Gemini (free tier) mechanically maps the clarified text into
-        |                a structured JSON rule (buy_when / sell_when conditions).
+  Convert        Turns the clarified strategy into a structured JSON rule.
+        |
         v
-  [Stage 2: Execute]    The JSON rule is evaluated by the C++ backtest engine against
-        |                historical OHLCV data.
+  Backtest       A C++ engine runs the rule against historical price data,
+                  computing indicators (SMA/EMA/RSI) with proper lookback and
+                  tracking every trade.
+        |
         v
-  [Stage 3: Explain]    An LLM turns the backtest results into a plain-English
-                         explanation. (not yet built)
+  Explain        Turns the numeric results (return %, trades, win rate) into a
+                  plain-English summary -- honest about both wins and losses.
 ```
 
 ## Repo layout
@@ -31,18 +36,15 @@ Plain English strategy
 
 ## `backtest/` (C++)
 
-Core pieces:
-- `Bar` — one OHLCV price bar
-- `Strategy` — interface a strategy implements: `on_bar(bars, current_index) -> Signal`,
-  with access to full bar history (no lookahead past `current_index`)
-- `Engine` — walks bars one at a time, feeding each to a `Strategy` and applying its
-  signal to a `Portfolio`
-- `Portfolio` — tracks cash/position, executes all-in Buy / all-out Sell at bar close,
-  records a trade log
-- `indicators.h` — SMA, EMA, RSI, computed with proper lookback (Wilder's smoothing for RSI)
-- `RuleStrategy` — builds a `Strategy` directly from a JSON rule (via `nlohmann-json`)
-  matching the schema below, so no strategy-specific C++ code is needed per strategy
-- `compute_performance` — total return %, trade count, win rate from a finished run
+- `Bar` / `Strategy` / `Engine` / `Portfolio` — the core event-driven backtest loop.
+  `Strategy::on_bar` gets full bar history up to (never past) the current bar, so
+  strategies can compute indicators without any lookahead.
+- `indicators.h` — SMA, EMA, RSI
+- `RuleStrategy` — builds a runnable strategy directly from a JSON rule, so no
+  strategy-specific C++ code is needed per strategy
+- `backtest_cli` — a small CLI wrapping all of the above: given a bars CSV path and
+  starting cash as arguments and a JSON rule on stdin, runs the backtest and prints
+  a performance report (`total_return_pct`, `num_trades`, `win_rate_pct`) as JSON
 
 Build/test:
 ```
@@ -71,21 +73,23 @@ ctest --preset default
 }
 ```
 
-- `buy_when` / `sell_when`: lists of conditions, implicitly AND'd (no OR/nesting yet)
-- Each condition: `left operator right`
-- `left`/`right` can be a `price` field (open/high/low/close/volume), an `indicator`
-  (`sma`/`ema`/`rsi`, with a `period`), or a `constant` number
-- Operators: `lt`, `lte`, `gt`, `gte`, `eq`
+`buy_when`/`sell_when` are lists of conditions, implicitly AND'd. Each condition is
+`left operator right`, where `left`/`right` are a `price` field (open/high/low/close/
+volume), an `indicator` (`sma`/`ema`/`rsi` with a `period`), or a `constant` number.
+Operators: `lt`, `lte`, `gt`, `gte`, `eq`.
 
 ## `api/` (Python)
 
-FastAPI service, `uv`-managed. LLM stages implemented so far:
+FastAPI service, `uv`-managed. Orchestrates the pipeline above:
 
-- `stages/clarify.py` — Stage 1a, Gemini free tier
-- `stages/convert.py` — Stage 1b, Gemini free tier
+- `stages/clarify.py` — Clarify, via Gemini
+- `stages/convert.py` — Convert, via Gemini
+- `bridge.py` — invokes the compiled `backtest_cli` as a subprocess and parses its
+  JSON output
+- `stages/explain.py` — Explain, via Groq
 
-Both use Gemini's structured-output mode (`response_schema`) against Pydantic models
-in `schemas/`, so responses are guaranteed to parse into typed Python objects.
+All LLM calls use structured output (JSON schema / JSON mode) against Pydantic
+models in `schemas/`, so every stage's output is a typed, validated Python object.
 
 Setup:
 ```
@@ -94,11 +98,3 @@ uv sync
 cp .env.example .env   # fill in GEMINI_API_KEY and GROQ_API_KEY
 uv run uvicorn api.main:app --app-dir src
 ```
-
-## Not yet built
-
-- Stage 3 (Explain results in plain English)
-- A way to actually invoke the C++ engine from Python (subprocess, bindings, or CLI)
-- FastAPI endpoints wiring the stages together
-- OR logic / condition nesting in the rule schema
-- Fees, slippage, position sizing beyond all-in/all-out
