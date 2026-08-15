@@ -10,7 +10,8 @@
 </div>
 <form action="/ui/run" method="post">
   <textarea name="clarified_description">{{ clarified_description }}</textarea>
-  <button type="submit">Looks good, run the backtest</button>
+  <input type="hidden" name="symbol" value="{{ symbol }}">
+  <button type="submit">Looks good, run the backtest on {{ symbol }}</button>
 </form>
 <p><a href="/">&larr; start over</a></p>
 {% endblock %}

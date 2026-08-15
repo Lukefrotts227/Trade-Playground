@@ -7,6 +7,7 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
 from api.bridge import run_backtest
+from api.datasets import get_dataset_path, list_datasets
 from api.schemas import BacktestResult, ClarifyResult, StrategyRule
 from api.stages.clarify import clarify
 from api.stages.convert import convert
@@ -24,7 +25,7 @@ _FRIENDLY_ERROR = (
 _TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
 
-_SAMPLE_BARS_PATH = Path(__file__).resolve().parents[3] / "backtest" / "tests" / "fixtures" / "sample_bars.csv"
+_DEFAULT_SYMBOL = "SPY"
 _STARTING_CASH = 10000.0
 
 
@@ -34,6 +35,7 @@ class ClarifyRequest(BaseModel):
 
 class RunRequest(BaseModel):
     clarified_description: str
+    symbol: str = _DEFAULT_SYMBOL
 
 
 class RunResponse(BaseModel):
@@ -47,6 +49,11 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@app.get("/datasets")
+def datasets_endpoint() -> list[str]:
+    return list_datasets()
+
+
 @app.post("/clarify")
 def clarify_endpoint(request: ClarifyRequest) -> ClarifyResult:
     return clarify(request.raw_strategy_text)
@@ -55,7 +62,8 @@ def clarify_endpoint(request: ClarifyRequest) -> ClarifyResult:
 @app.post("/run")
 def run_endpoint(request: RunRequest) -> RunResponse:
     rule = convert(request.clarified_description)
-    result = run_backtest(str(_SAMPLE_BARS_PATH), rule, _STARTING_CASH)
+    bars_path = get_dataset_path(request.symbol)
+    result = run_backtest(str(bars_path), rule, _STARTING_CASH)
     explanation = explain(result)
 
     return RunResponse(rule=rule, result=result, explanation=explanation.explanation)
@@ -63,11 +71,13 @@ def run_endpoint(request: RunRequest) -> RunResponse:
 
 @app.get("/", response_class=HTMLResponse)
 def ui_index(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse(request, "index.html", {})
+    return templates.TemplateResponse(request, "index.html", {"datasets": list_datasets()})
 
 
 @app.post("/ui/clarify", response_class=HTMLResponse)
-def ui_clarify(request: Request, raw_strategy_text: str = Form(...)) -> HTMLResponse:
+def ui_clarify(
+    request: Request, raw_strategy_text: str = Form(...), symbol: str = Form(_DEFAULT_SYMBOL)
+) -> HTMLResponse:
     try:
         result = clarify(raw_strategy_text)
     except Exception:
@@ -75,7 +85,12 @@ def ui_clarify(request: Request, raw_strategy_text: str = Form(...)) -> HTMLResp
         return templates.TemplateResponse(
             request,
             "index.html",
-            {"raw_strategy_text": raw_strategy_text, "error": _FRIENDLY_ERROR},
+            {
+                "raw_strategy_text": raw_strategy_text,
+                "symbol": symbol,
+                "datasets": list_datasets(),
+                "error": _FRIENDLY_ERROR,
+            },
         )
 
     return templates.TemplateResponse(
@@ -84,28 +99,33 @@ def ui_clarify(request: Request, raw_strategy_text: str = Form(...)) -> HTMLResp
         {
             "clarified_description": result.clarified_description,
             "explanation": result.explanation,
+            "symbol": symbol,
         },
     )
 
 
 @app.post("/ui/run", response_class=HTMLResponse)
-def ui_run(request: Request, clarified_description: str = Form(...)) -> HTMLResponse:
+def ui_run(
+    request: Request, clarified_description: str = Form(...), symbol: str = Form(_DEFAULT_SYMBOL)
+) -> HTMLResponse:
     try:
         rule = convert(clarified_description)
-        result = run_backtest(str(_SAMPLE_BARS_PATH), rule, _STARTING_CASH)
+        bars_path = get_dataset_path(symbol)
+        result = run_backtest(str(bars_path), rule, _STARTING_CASH)
         explanation = explain(result)
     except Exception:
         logger.exception("ui_run() failed")
         return templates.TemplateResponse(
             request,
             "index.html",
-            {"error": _FRIENDLY_ERROR},
+            {"datasets": list_datasets(), "error": _FRIENDLY_ERROR},
         )
 
     return templates.TemplateResponse(
         request,
         "run_result.html",
         {
+            "symbol": symbol,
             "rule_json": rule.model_dump_json(indent=2),
             "result": result,
             "explanation": explanation.explanation,

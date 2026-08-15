@@ -55,6 +55,14 @@ cmake --build --preset default
 ctest --preset default
 ```
 
+### Historical data
+
+`backtest/data/` holds one CSV per symbol (`timestamp,open,high,low,close,volume`),
+registered in `api/src/api/datasets.py`. Ships with several years of daily SPY data.
+
+To add another symbol: drop a matching CSV into `backtest/data/` and add one line
+to the `DATASETS` dict in `datasets.py`.
+
 ### JSON rule schema
 
 ```json

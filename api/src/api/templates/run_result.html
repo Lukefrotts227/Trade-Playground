@@ -1,5 +1,6 @@
 {% extends "_base.html" %}
 {% block content %}
+<p>Backtested against <strong>{{ symbol }}</strong>.</p>
 <div class="box">
   <div class="metric"><b>{{ "%.1f"|format(result.total_return_pct) }}%</b>total return</div>
   <div class="metric"><b>{{ result.num_trades }}</b>trades</div>

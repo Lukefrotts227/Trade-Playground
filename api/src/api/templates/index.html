@@ -3,6 +3,12 @@
 <p>Describe a trading strategy in plain English. No finance background needed.</p>
 <form action="/ui/clarify" method="post">
   <textarea name="raw_strategy_text" placeholder="e.g. buy when it looks oversold and sell when it looks overbought" required>{{ raw_strategy_text or "" }}</textarea>
+  <label for="symbol">Dataset:</label>
+  <select name="symbol" id="symbol">
+    {% for d in datasets %}
+    <option value="{{ d }}" {% if d == symbol %}selected{% endif %}>{{ d }}</option>
+    {% endfor %}
+  </select>
   <button type="submit">Clarify my strategy</button>
 </form>
 {% if error %}
