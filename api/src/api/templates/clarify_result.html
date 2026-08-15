@@ -1,0 +1,16 @@
+{% extends "_base.html" %}
+{% block content %}
+<div class="box">
+  <strong>Here's what I understood:</strong>
+  <p>{{ clarified_description }}</p>
+</div>
+<div class="box">
+  <strong>What this means:</strong>
+  <p>{{ explanation }}</p>
+</div>
+<form action="/ui/run" method="post">
+  <textarea name="clarified_description">{{ clarified_description }}</textarea>
+  <button type="submit">Looks good, run the backtest</button>
+</form>
+<p><a href="/">&larr; start over</a></p>
+{% endblock %}

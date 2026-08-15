@@ -1,0 +1,11 @@
+{% extends "_base.html" %}
+{% block content %}
+<p>Describe a trading strategy in plain English. No finance background needed.</p>
+<form action="/ui/clarify" method="post">
+  <textarea name="raw_strategy_text" placeholder="e.g. buy when it looks oversold and sell when it looks overbought" required>{{ raw_strategy_text or "" }}</textarea>
+  <button type="submit">Clarify my strategy</button>
+</form>
+{% if error %}
+<div class="box" style="background:#fde8e8;">{{ error }}</div>
+{% endif %}
+{% endblock %}
