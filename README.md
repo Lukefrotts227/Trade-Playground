@@ -106,3 +106,18 @@ uv sync
 cp .env.example .env   # fill in GEMINI_API_KEY and GROQ_API_KEY
 uv run uvicorn api.main:app --app-dir src
 ```
+
+### Web UI
+
+Visit `http://127.0.0.1:8000/` for a basic server-rendered flow: describe a
+strategy and pick a dataset, review the clarified version and its explanation,
+then confirm to run the backtest and see the results. Errors (e.g. LLM free-tier
+limits) show inline with a friendly message.
+
+### JSON endpoints
+
+- `GET /health` — liveness check
+- `GET /datasets` — list available dataset symbols
+- `POST /clarify` — `{ "raw_strategy_text": str }` → clarified description + explanation
+- `POST /run` — `{ "clarified_description": str, "symbol": str }` → runs Convert →
+  Backtest → Explain, returns the rule, the numeric result, and the explanation
